@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expenso – Multi-Currency Expense Tracker</title>
+    <meta name="description" content="Track your daily and monthly expenses in MYR, USD, and IDR with live exchange rates.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Firebase SDK v9 (modular, via CDN compat build) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+    <!-- ============================================
+         AUTH SCREEN (Login / Sign Up)
+    ============================================ -->
+    <div id="authScreen" class="auth-screen">
+        <div class="auth-bg-blobs">
+            <div class="blob blob-1"></div>
+            <div class="blob blob-2"></div>
+            <div class="blob blob-3"></div>
+        </div>
+
+        <div class="auth-card glass-panel">
+            <div class="auth-logo">
+                <i class="fa-solid fa-wallet"></i>
+                <h1>Expenso</h1>
+                <p>Your personal multi-currency expense tracker</p>
+            </div>
+
+            <!-- Tab Switcher -->
+            <div class="auth-tabs">
+                <button id="tabLogin" class="auth-tab active" onclick="switchTab('login')">Login</button>
+                <button id="tabSignup" class="auth-tab" onclick="switchTab('signup')">Sign Up</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" class="auth-form" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label for="loginEmail">Email Address</label>
+                    <div class="input-icon-wrap">
+                        <i class="fa-solid fa-envelope"></i>
+                        <input type="email" id="loginEmail" placeholder="you@example.com" required autocomplete="email">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <div class="input-icon-wrap">
+                        <i class="fa-solid fa-lock"></i>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+                        <button type="button" class="toggle-password" onclick="togglePassword('loginPassword')">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="loginError" class="auth-error hidden"></div>
+                <button type="submit" class="btn-auth" id="loginBtn">
+                    <span>Log In</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+                <p class="auth-switch">Don't have an account? <a href="#" onclick="switchTab('signup')">Sign Up</a></p>
+            </form>
+
+            <!-- Sign Up Form -->
+            <form id="signupForm" class="auth-form hidden" onsubmit="handleSignup(event)">
+                <div class="form-group">
+                    <label for="signupName">Full Name</label>
+                    <div class="input-icon-wrap">
+                        <i class="fa-solid fa-user"></i>
+                        <input type="text" id="signupName" placeholder="John Doe" required autocomplete="name">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="signupEmail">Email Address</label>
+                    <div class="input-icon-wrap">
+                        <i class="fa-solid fa-envelope"></i>
+                        <input type="email" id="signupEmail" placeholder="you@example.com" required autocomplete="email">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="signupPassword">Password</label>
+                    <div class="input-icon-wrap">
+                        <i class="fa-solid fa-lock"></i>
+                        <input type="password" id="signupPassword" placeholder="Min. 6 characters" required minlength="6" autocomplete="new-password">
+                        <button type="button" class="toggle-password" onclick="togglePassword('signupPassword')">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="signupConfirm">Confirm Password</label>
+                    <div class="input-icon-wrap">
+                        <i class="fa-solid fa-lock"></i>
+                        <input type="password" id="signupConfirm" placeholder="Repeat password" required minlength="6" autocomplete="new-password">
+                    </div>
+                </div>
+                <div id="signupError" class="auth-error hidden"></div>
+                <button type="submit" class="btn-auth" id="signupBtn">
+                    <span>Create Account</span>
+                    <i class="fa-solid fa-user-plus"></i>
+                </button>
+                <p class="auth-switch">Already have an account? <a href="#" onclick="switchTab('login')">Log In</a></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================
+         MAIN APP SCREEN (Dashboard)
+    ============================================ -->
+    <div id="appScreen" class="app-container hidden">
+
+        <!-- Sidebar -->
+        <aside class="sidebar glass-panel">
+            <div class="logo">
+                <i class="fa-solid fa-wallet"></i>
+                <h2>Expenso</h2>
+            </div>
+
+            <div class="nav-links">
+                <a href="#" class="active" id="navDashboard"><i class="fa-solid fa-chart-pie"></i> Dashboard</a>
+                <a href="#" id="navTransactions"><i class="fa-solid fa-money-bill-transfer"></i> Transactions</a>
+            </div>
+
+            <div class="sidebar-user">
+                <div class="user-avatar" id="userAvatar">?</div>
+                <div class="user-info">
+                    <p class="user-name" id="userDisplayName">User</p>
+                    <p class="user-email" id="userEmail">user@example.com</p>
+                </div>
+                <button class="btn-logout" id="logoutBtn" onclick="handleLogout()" title="Logout">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <div>
+                    <h1 id="pageTitle">Dashboard</h1>
+                    <p class="header-subtitle">Welcome back, <span id="headerUsername">User</span>!</p>
+                </div>
+
+                <div class="header-controls">
+                    <div class="currency-selector glass-panel">
+                        <label for="baseCurrency">Base Currency:</label>
+                        <select id="baseCurrency" onchange="onBaseCurrencyChange(this.value)">
+                            <option value="MYR" selected>🇲🇾 MYR</option>
+                            <option value="USD">🇺🇸 USD</option>
+                            <option value="IDR">🇮🇩 IDR</option>
+                        </select>
+                    </div>
+                    <div class="rate-status glass-panel" id="rateStatus">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i> Fetching rates...
+                    </div>
+                </div>
+            </header>
+
+            <!-- Summary Cards -->
+            <section class="summary-cards">
+                <div class="card glass-panel">
+                    <div class="card-icon"><i class="fa-solid fa-calendar-day"></i></div>
+                    <div class="card-info">
+                        <h3>Today's Expenses</h3>
+                        <p class="amount" id="dailyTotal">—</p>
+                    </div>
+                </div>
+                <div class="card glass-panel">
+                    <div class="card-icon monthly"><i class="fa-solid fa-calendar-week"></i></div>
+                    <div class="card-info">
+                        <h3>This Month</h3>
+                        <p class="amount" id="monthlyTotal">—</p>
+                    </div>
+                </div>
+                <div class="card glass-panel">
+                    <div class="card-icon transactions"><i class="fa-solid fa-list-check"></i></div>
+                    <div class="card-info">
+                        <h3>Total Transactions</h3>
+                        <p class="amount" id="totalTransactions">0</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Dashboard View -->
+            <div class="dashboard-grid" id="dashboardView">
+
+                <!-- Add Expense Form -->
+                <div class="glass-panel form-container">
+                    <h2><i class="fa-solid fa-plus-circle"></i> Add Expense</h2>
+                    <form id="expenseForm" onsubmit="handleAddExpense(event)">
+                        <div class="form-group">
+                            <label for="amount">Amount</label>
+                            <div class="input-group">
+                                <select id="expenseCurrency">
+                                    <option value="MYR">MYR</option>
+                                    <option value="USD">USD</option>
+                                    <option value="IDR">IDR</option>
+                                </select>
+                                <input type="number" id="amount" placeholder="0.00" step="0.01" min="0.01" required>
+                            </div>
+                            <!-- Live conversion preview -->
+                            <div class="conversion-preview" id="conversionPreview"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="category">Category</label>
+                            <select id="category" required>
+                                <option value="" disabled selected>Select Category</option>
+                                <option value="Food & Dining">🍔 Food & Dining</option>
+                                <option value="Transportation">🚗 Transportation</option>
+                                <option value="Shopping">🛍️ Shopping</option>
+                                <option value="Entertainment">🎬 Entertainment</option>
+                                <option value="Transfers">💸 Transfers</option>
+                                <option value="Utilities">💡 Utilities</option>
+                                <option value="Healthcare">🏥 Healthcare</option>
+                                <option value="Education">📚 Education</option>
+                                <option value="Other">📦 Other</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="expenseDate">Date</label>
+                            <input type="date" id="expenseDate" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="description">Description (Optional)</label>
+                            <input type="text" id="description" placeholder="What was this for?">
+                        </div>
+
+                        <button type="submit" class="btn-submit" id="addExpenseBtn">
+                            <i class="fa-solid fa-plus"></i> Add Transaction
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="charts-container">
+                    <div class="glass-panel chart-box">
+                        <h3><i class="fa-solid fa-chart-pie"></i> By Category</h3>
+                        <canvas id="categoryChart"></canvas>
+                        <div id="categoryChartEmpty" class="chart-empty hidden">No data yet</div>
+                    </div>
+                    <div class="glass-panel chart-box">
+                        <h3><i class="fa-solid fa-chart-bar"></i> Last 7 Days</h3>
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Recent Transactions Table -->
+                <div class="glass-panel history-container" id="historySection">
+                    <div class="history-header">
+                        <h2><i class="fa-solid fa-clock-rotate-left"></i> Recent Transactions</h2>
+                        <div class="history-filters">
+                            <input type="text" id="searchInput" placeholder="Search..." oninput="renderTransactions()">
+                            <select id="filterCategory" onchange="renderTransactions()">
+                                <option value="">All Categories</option>
+                                <option value="Food & Dining">Food & Dining</option>
+                                <option value="Transportation">Transportation</option>
+                                <option value="Shopping">Shopping</option>
+                                <option value="Entertainment">Entertainment</option>
+                                <option value="Transfers">Transfers</option>
+                                <option value="Utilities">Utilities</option>
+                                <option value="Healthcare">Healthcare</option>
+                                <option value="Education">Education</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" id="tableWrapper">
+                        <table id="transactionsTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Description</th>
+                                    <th>Category</th>
+                                    <th>Original</th>
+                                    <th>In <span class="base-currency-label">MYR</span></th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactionList"></tbody>
+                        </table>
+                    </div>
+
+                    <div id="emptyState" class="empty-state hidden">
+                        <i class="fa-solid fa-receipt"></i>
+                        <p>No transactions yet. Add your first one!</p>
+                    </div>
+                    <div id="loadingState" class="empty-state">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i>
+                        <p>Loading transactions...</p>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Delete Confirm Modal -->
+    <div id="deleteModal" class="modal-overlay hidden">
+        <div class="modal-card glass-panel">
+            <i class="fa-solid fa-triangle-exclamation modal-icon"></i>
+            <h3>Delete Transaction?</h3>
+            <p>This action cannot be undone.</p>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn-confirm-delete" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
